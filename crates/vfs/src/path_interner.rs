@@ -9,7 +9,7 @@ use rustc_hash::FxHasher;
 use crate::{FileId, VfsPath};
 
 /// Structure to map between [`VfsPath`] and [`FileId`].
-#[derive(Default)]
+#[derive(Default, serde::Serialize, serde::Deserialize)]
 pub(crate) struct PathInterner {
     map: IndexSet<VfsPath, BuildHasherDefault<FxHasher>>,
 }

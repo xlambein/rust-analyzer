@@ -62,7 +62,9 @@ use tracing::{Level, span};
 /// Handle to a file in [`Vfs`]
 ///
 /// Most functions in rust-analyzer use this when they need to refer to a file.
-#[derive(Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Hash)]
+#[derive(
+    Copy, Clone, Debug, Ord, PartialOrd, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub struct FileId(u32);
 // pub struct FileId(NonMaxU32);
 
@@ -87,14 +89,15 @@ impl nohash_hasher::IsEnabled for FileId {}
 /// Storage for all file changes and the file id to path mapping.
 ///
 /// For more information see the [crate-level](crate) documentation.
-#[derive(Default)]
+#[derive(Default, serde::Serialize, serde::Deserialize)]
 pub struct Vfs {
     interner: PathInterner,
     data: Vec<FileState>,
+    #[serde(skip)]
     changes: IndexMap<FileId, ChangedFile, BuildHasherDefault<FxHasher>>,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Copy, Clone, Debug, PartialEq, PartialOrd, serde::Serialize, serde::Deserialize)]
 pub enum FileState {
     /// The file exists with the given content hash.
     Exists(u64),

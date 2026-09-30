@@ -28,6 +28,7 @@ triomphe.workspace = true
 nohash-hasher.workspace = true
 bitflags.workspace = true
 smallvec.workspace = true
+serde.workspace = true
 
 # local deps
 base-db.workspace = true
@@ -49,6 +50,7 @@ line-index.workspace = true
 
 [dev-dependencies]
 expect-test = "1.5.1"
+serde_json = "1.0.151"
 
 [features]
 default = []

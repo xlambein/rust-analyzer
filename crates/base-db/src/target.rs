@@ -4,7 +4,7 @@ use std::fmt;
 
 use triomphe::Arc;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum Arch {
     // Only what we need is present here.
     Wasm32,
@@ -12,7 +12,7 @@ pub enum Arch {
     Other,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TargetData {
     pub data_layout: Box<str>,
     pub arch: Arch,
@@ -20,6 +20,24 @@ pub struct TargetData {
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct TargetLoadError(Arc<str>);
+
+impl serde::Serialize for TargetLoadError {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for TargetLoadError {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Self(Arc::from(String::deserialize(deserializer)?)))
+    }
+}
 
 impl fmt::Debug for TargetLoadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

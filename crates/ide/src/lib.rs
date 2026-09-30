@@ -244,6 +244,18 @@ pub struct Analysis {
     db: RootDatabase,
 }
 
+impl Analysis {
+    pub fn persist(&mut self, path: &std::path::Path) {
+        serde_json::to_writer(
+            std::fs::File::create(path.join("salsa.json")).unwrap(),
+            &<dyn salsa::Database>::as_serialize(&mut self.db),
+        )
+        .unwrap();
+        serde_json::to_writer(std::fs::File::create(path.join("db.json")).unwrap(), &self.db)
+            .unwrap();
+    }
+}
+
 // As a general design guideline, `Analysis` API are intended to be independent
 // from the language server protocol. That is, when exposing some functionality
 // we should think in terms of "what API makes most sense" and not in terms of

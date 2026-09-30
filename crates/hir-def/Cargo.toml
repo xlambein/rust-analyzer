@@ -28,6 +28,7 @@ smallvec.workspace = true
 triomphe.workspace = true
 rustc_apfloat = "0.2.3"
 salsa.workspace = true
+serde.workspace = true
 
 ra-ap-rustc_parse_format.workspace = true
 ra-ap-rustc_abi.workspace = true

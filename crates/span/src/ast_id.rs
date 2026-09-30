@@ -54,7 +54,7 @@ pub const NO_DOWNMAP_ERASED_FILE_AST_ID_MARKER: ErasedFileAstId =
     ErasedFileAstId(pack_hash_index_and_kind(0, 0, ErasedFileAstIdKind::NoDownmap as u32));
 
 /// This is a type erased FileAstId.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct ErasedFileAstId(u32);
 
 impl fmt::Debug for ErasedFileAstId {
@@ -288,6 +288,24 @@ pub trait AstIdNode: AstNode {}
 pub struct FileAstId<N> {
     raw: ErasedFileAstId,
     _marker: PhantomData<fn() -> N>,
+}
+
+impl<N> serde::Serialize for FileAstId<N> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.raw.serialize(serializer)
+    }
+}
+
+impl<'de, N> serde::Deserialize<'de> for FileAstId<N> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Self { raw: ErasedFileAstId::deserialize(deserializer)?, _marker: PhantomData })
+    }
 }
 
 /// Traits are manually implemented because `derive` adds redundant bounds.

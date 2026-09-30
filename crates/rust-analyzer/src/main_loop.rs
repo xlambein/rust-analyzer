@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use crossbeam_channel::{Receiver, never, select};
+use crossbeam_channel::{Receiver, never, select, tick};
 use ide_db::base_db::{SourceDatabase, VfsPath};
 use lsp_server::{Connection, Notification, Request};
 use lsp_types::{Notification as _, TextDocumentIdentifier};
@@ -80,6 +80,7 @@ enum Event {
     TestResult(CargoTestMessage),
     DiscoverProject(DiscoverProjectMessage),
     FetchWorkspaces(FetchWorkspaceRequest),
+    Persist,
 }
 
 impl fmt::Display for Event {
@@ -93,6 +94,7 @@ impl fmt::Display for Event {
             Event::TestResult(_) => write!(f, "Event::TestResult"),
             Event::DiscoverProject(_) => write!(f, "Event::DiscoverProject"),
             Event::FetchWorkspaces(_) => write!(f, "Event::FetchWorkspaces"),
+            Event::Persist => write!(f, "Event::Persist"),
         }
     }
 }
@@ -169,6 +171,7 @@ impl fmt::Debug for Event {
             Event::TestResult(it) => fmt::Debug::fmt(it, f),
             Event::DiscoverProject(it) => fmt::Debug::fmt(it, f),
             Event::FetchWorkspaces(it) => fmt::Debug::fmt(it, f),
+            Event::Persist => write!(f, "Persist"),
         }
     }
 }
@@ -176,6 +179,7 @@ impl fmt::Debug for Event {
 impl GlobalState {
     fn run(mut self, inbox: Receiver<lsp_server::Message>) -> anyhow::Result<()> {
         self.update_status_or_notify();
+        let persist_timer = tick(Duration::from_secs(30));
 
         if self.config.did_save_text_document_dynamic_registration() {
             let additional_patterns = self
@@ -200,7 +204,7 @@ impl GlobalState {
             }
         }
 
-        while let Ok(event) = self.next_event(&inbox) {
+        while let Ok(event) = self.next_event(&inbox, &persist_timer) {
             let Some(event) = event else {
                 anyhow::bail!("client exited without proper shutdown sequence");
             };
@@ -274,6 +278,7 @@ impl GlobalState {
     fn next_event(
         &mut self,
         inbox: &Receiver<lsp_server::Message>,
+        persist_timer: &Receiver<Instant>,
     ) -> Result<Option<Event>, crossbeam_channel::RecvError> {
         // Make sure we reply to formatting requests ASAP so the editor doesn't block
         if let Ok(task) = self.fmt_pool.receiver.try_recv() {
@@ -308,6 +313,9 @@ impl GlobalState {
             recv(self.fetch_ws_receiver.as_ref().map_or(&never(), |(chan, _)| chan)) -> _instant => {
                 Ok(Event::FetchWorkspaces(self.fetch_ws_receiver.take().unwrap().1))
             },
+
+            recv(persist_timer) -> _instant =>
+                Ok(Event::Persist),
         }
         .map(Some)
     }
@@ -495,6 +503,7 @@ impl GlobalState {
             Event::FetchWorkspaces(req) => {
                 self.fetch_workspaces_queue.request_op("project structure change".to_owned(), req)
             }
+            Event::Persist => self.persist(),
         }
         let event_handling_duration = loop_start.elapsed();
         let ((state_changed, changes_cancellation_time), memdocs_added_or_removed) =

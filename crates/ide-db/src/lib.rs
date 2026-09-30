@@ -79,6 +79,7 @@ pub type FilePosition = FilePositionWrapper<FileId>;
 pub type FileRange = FileRangeWrapper<FileId>;
 
 #[salsa::db]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct RootDatabase {
     // FIXME: Revisit this commit now that we migrated to the new salsa, given we store arcs in this
     // db directly now
@@ -86,9 +87,11 @@ pub struct RootDatabase {
     // `&RootDatabase -> &dyn OtherDatabase` cast will instantiate its drop glue in the vtable,
     // which duplicates `Weak::drop` and `Arc::drop` tens of thousands of times, which makes
     // compile times of all `ide_*` and downstream crates suffer greatly.
+    #[serde(skip)]
     storage: ManuallyDrop<salsa::Storage<Self>>,
     files: Arc<Files>,
     crates_map: Arc<CratesMap>,
+    #[serde(skip)]
     nonce: Nonce,
 }
 
@@ -421,5 +424,190 @@ impl<'a> Default for MiniCore<'a> {
     #[inline]
     fn default() -> Self {
         Self::default()
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use std::{
+        path::PathBuf,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
+
+    use base_db::{
+        BuiltCrateData, Crate, CrateBuilderId, CrateDisplayName, CrateName, CrateOrigin,
+        CrateWorkspaceData, ExtraCrateData, target::TargetLoadError,
+    };
+    use hir::{
+        HirFileId, Symbol,
+        db::{FILE_ITEM_TREE_EXECUTIONS, file_item_tree},
+    };
+    use span::Edition;
+    use vfs::AbsPathBuf;
+
+    use super::*;
+
+    #[test]
+    fn persist_simple() {
+        static EXECUTIONS: AtomicUsize = AtomicUsize::new(0);
+
+        #[salsa::tracked(returns(copy), persist)]
+        fn file_len(db: &dyn salsa::Database, file: FileText) -> usize {
+            EXECUTIONS.fetch_add(1, Ordering::Relaxed);
+            file.text(db).len()
+        }
+
+        let mut db = RootDatabase::new(None);
+        db.set_file_text(FileId::from_raw(123), "fn main() {}");
+
+        assert_eq!(file_len(&db, db.file_text(FileId::from_raw(123))), 12);
+        assert_eq!(EXECUTIONS.load(Ordering::Relaxed), 1);
+
+        let salsa_json =
+            serde_json::to_string_pretty(&<dyn salsa::Database>::as_serialize(&mut db))
+                .expect("serialize");
+        let db_json = serde_json::to_string_pretty(&db).expect("serialize");
+
+        let mut db: RootDatabase = serde_json::from_str(&db_json).expect("deserialize");
+        <dyn salsa::Database>::deserialize(
+            &mut db,
+            &mut serde_json::Deserializer::from_str(&salsa_json),
+        )
+        .expect("deserialize");
+
+        assert_eq!(db.file_text(FileId::from_raw(123)).text(&db).as_ref(), "fn main() {}");
+        assert_eq!(file_len(&db, db.file_text(FileId::from_raw(123))), 12);
+        assert_eq!(EXECUTIONS.load(Ordering::Relaxed), 1);
+
+        db.set_file_text(FileId::from_raw(123), "fn main() { println!(\"hi\"); }");
+
+        assert_eq!(file_len(&db, db.file_text(FileId::from_raw(123))), 29);
+        assert_eq!(EXECUTIONS.load(Ordering::Relaxed), 2);
+    }
+
+    #[test]
+    fn persist() {
+        fn make_crate_graph(file: FileId) -> (CrateGraphBuilder, CrateBuilderId) {
+            let mut graph = CrateGraphBuilder::default();
+
+            let krate = graph.add_crate_root(
+                file,
+                Edition::CURRENT,
+                None,               // display name
+                None,               // version
+                Default::default(), // cfg_options
+                Default::default(), // potential_cfg_options
+                Default::default(), // env
+                CrateOrigin::Local { repo: None, name: Some(Symbol::intern("test")) },
+                Vec::new(), // crate attrs
+                false,      // proc macro
+                Arc::new(AbsPathBuf::try_from("/tmp").unwrap()),
+                Arc::new(CrateWorkspaceData {
+                    target: Err(TargetLoadError::from("this is a test")),
+                    toolchain: None,
+                }),
+            );
+
+            (graph, krate)
+        }
+
+        let mut db = RootDatabase::new(None);
+        let file = FileId::from_raw(0);
+        db.set_file_text(file, "fn main() {}");
+        let hir_file = HirFileId::FileId(EditionedFileId::current_edition(&db, file));
+        let (graph, crate_id) = make_crate_graph(file);
+        let id_map = graph.set_in_db(&mut db);
+        let krate = id_map[&crate_id];
+
+        file_item_tree(&db, hir_file, krate);
+        assert_eq!(FILE_ITEM_TREE_EXECUTIONS.load(Ordering::Relaxed), 1);
+
+        let salsa_json =
+            serde_json::to_string_pretty(&<dyn salsa::Database>::as_serialize(&mut db))
+                .expect("serialize");
+        let db_json = serde_json::to_string_pretty(&db).expect("serialize");
+        eprintln!("{salsa_json}");
+        let tree1 = file_item_tree(&db, hir_file, krate);
+
+        let mut db: RootDatabase = serde_json::from_str(&db_json).expect("deserialize");
+        <dyn salsa::Database>::deserialize(
+            &mut db,
+            &mut serde_json::Deserializer::from_str(&salsa_json),
+        )
+        .expect("deserialize");
+
+        let hir_file = HirFileId::FileId(EditionedFileId::current_edition(&db, file));
+        let (graph, crate_id) = make_crate_graph(file);
+        let id_map = graph.set_in_db(&mut db);
+        let krate = id_map[&crate_id];
+        let tree2 = file_item_tree(&db, hir_file, krate);
+        assert_eq!(FILE_ITEM_TREE_EXECUTIONS.load(Ordering::Relaxed), 1);
+        assert_eq!(tree1, tree2);
+    }
+
+    #[test]
+    fn persist_to_disk() {
+        fn make_crate_graph(file: FileId) -> (CrateGraphBuilder, CrateBuilderId) {
+            let mut graph = CrateGraphBuilder::default();
+
+            let krate = graph.add_crate_root(
+                file,
+                Edition::CURRENT,
+                None,               // display name
+                None,               // version
+                Default::default(), // cfg_options
+                Default::default(), // potential_cfg_options
+                Default::default(), // env
+                CrateOrigin::Local { repo: None, name: Some(Symbol::intern("test")) },
+                Vec::new(), // crate attrs
+                false,      // proc macro
+                Arc::new(AbsPathBuf::try_from("/tmp").unwrap()),
+                Arc::new(CrateWorkspaceData {
+                    target: Err(TargetLoadError::from("this is a test")),
+                    toolchain: None,
+                }),
+            );
+
+            (graph, krate)
+        }
+
+        let salsa_path = PathBuf::from("/var/tmp/salsa.json");
+        let db_path = PathBuf::from("/var/tmp/db.json");
+        let file = FileId::from_raw(0);
+
+        if !salsa_path.exists() || !db_path.exists() {
+            let mut db = RootDatabase::new(None);
+            db.set_file_text(file, "fn main() {}");
+            let hir_file = HirFileId::FileId(EditionedFileId::current_edition(&db, file));
+            let (graph, crate_id) = make_crate_graph(file);
+            let id_map = graph.set_in_db(&mut db);
+            let krate = id_map[&crate_id];
+
+            file_item_tree(&db, hir_file, krate);
+            assert_eq!(FILE_ITEM_TREE_EXECUTIONS.load(Ordering::Relaxed), 1);
+
+            serde_json::to_writer_pretty(
+                std::fs::File::create(salsa_path).unwrap(),
+                &<dyn salsa::Database>::as_serialize(&mut db),
+            )
+            .unwrap();
+            serde_json::to_writer(std::fs::File::create(db_path).unwrap(), &db).unwrap();
+        } else {
+            let mut db: RootDatabase =
+                serde_json::from_reader(std::fs::File::open(db_path).unwrap()).unwrap();
+            let salsa_json = std::fs::read_to_string(salsa_path).unwrap();
+            <dyn salsa::Database>::deserialize(
+                &mut db,
+                &mut serde_json::Deserializer::from_str(&salsa_json),
+            )
+            .expect("deserialize");
+
+            let hir_file = HirFileId::FileId(EditionedFileId::current_edition(&db, file));
+            let (graph, crate_id) = make_crate_graph(file);
+            let id_map = graph.set_in_db(&mut db);
+            let krate = id_map[&crate_id];
+            file_item_tree(&db, hir_file, krate);
+            assert_eq!(FILE_ITEM_TREE_EXECUTIONS.load(Ordering::Relaxed), 0);
+        }
     }
 }

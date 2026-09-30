@@ -20,6 +20,7 @@ arrayvec.workspace = true
 ra-ap-rustc_lexer.workspace = true
 salsa.workspace = true
 bitflags.workspace = true
+serde.workspace = true
 
 # local deps
 parser.workspace = true

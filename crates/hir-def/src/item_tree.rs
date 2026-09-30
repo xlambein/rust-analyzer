@@ -70,7 +70,7 @@ pub(crate) use crate::item_tree::{
     lower::{lower_use_tree, visibility_from_ast},
 };
 
-#[derive(Copy, Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) struct RawVisibilityId(u32);
 
 impl RawVisibilityId {
@@ -137,12 +137,17 @@ pub fn file_item_tree(db: &dyn SourceDatabase, file_id: HirFileId, krate: Crate)
     }
 }
 
-#[salsa::tracked(returns(ref))]
+use std::sync::atomic::{AtomicUsize, Ordering};
+pub static FILE_ITEM_TREE_EXECUTIONS: AtomicUsize = AtomicUsize::new(0);
+
+#[salsa::tracked(returns(ref), persist)]
 fn file_item_tree_query(
     db: &dyn SourceDatabase,
     file_id: HirFileId,
     krate: Crate,
 ) -> Option<Box<ItemTree>> {
+    FILE_ITEM_TREE_EXECUTIONS.fetch_add(1, Ordering::Relaxed);
+
     let _p = tracing::info_span!("file_item_tree_query", ?file_id).entered();
 
     let mut ctx = lower::Ctx::new(db, file_id, krate);
@@ -205,7 +210,7 @@ pub(crate) fn block_item_tree_query(
 }
 
 /// The item tree of a source file.
-#[derive(Debug, Default, Eq, PartialEq)]
+#[derive(Debug, Default, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ItemTree {
     top_level: Box<[ModItemId]>,
     /// Sorted by the id. The last item, if it has [`ModItemId::TOP_OWNER`], is the top level attrs.
@@ -282,12 +287,12 @@ impl ItemTree {
     }
 }
 
-#[derive(Default, Debug, Eq, PartialEq)]
+#[derive(Default, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 struct ItemVisibilities {
     arena: ThinVec<RawVisibility>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 enum SmallModItem {
     Const(Const),
     Enum(Enum),
@@ -303,7 +308,7 @@ enum SmallModItem {
     Union(Union),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 enum BigModItem {
     ExternCrate(ExternCrate),
     Mod(Mod),
@@ -369,7 +374,9 @@ impl TreeId {
     }
 }
 
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, PartialOrd, Ord)]
+#[derive(
+    Debug, Copy, Clone, Eq, PartialEq, Hash, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub struct ModItemId {
     /// The LSB is 0 for small_data and 1 for big_data.
     index: u32,
@@ -490,20 +497,20 @@ impl Index<RawVisibilityId> for ItemTree {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Use {
     pub(crate) visibility: RawVisibilityId,
     pub(crate) use_tree: UseTree,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct UseTree {
     kind: UseTreeKind,
 }
 
 // FIXME: Would be nice to encode `None` into this
 // We could just use a `Name` where `_` well means `_` ..
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ImportAlias {
     /// Unnamed alias, as in `use Foo as _;`
     Underscore,
@@ -531,7 +538,7 @@ impl fmt::Display for ImportAliasDisplay<'_> {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum UseTreeKind {
     /// ```ignore
     /// use path::to::Item;
@@ -552,45 +559,45 @@ pub enum UseTreeKind {
     Prefixed { prefix: Option<Interned<ModPath>>, list: Box<[UseTree]> },
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ExternCrate {
     pub name: Name,
     pub alias: Option<ImportAlias>,
     pub(crate) visibility: RawVisibilityId,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ExternBlock {
     pub(crate) children: Box<[ModItemId]>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Function {
     pub name: Name,
     pub(crate) visibility: RawVisibilityId,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Struct {
     pub name: Name,
     pub(crate) visibility: RawVisibilityId,
     pub(crate) value_ns_ctor: StructValueNsCtor,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub(crate) enum StructValueNsCtor {
     NoValueNsCtor,
     ValueNsCtorWithVis(RawVisibilityId),
     ValueNsCtorWithMinVis(ThinVec<RawVisibilityId>),
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Union {
     pub name: Name,
     pub(crate) visibility: RawVisibilityId,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Enum {
     pub name: Name,
     pub(crate) visibility: RawVisibilityId,
@@ -614,7 +621,7 @@ impl FieldsShape {
 }
 
 /// Visibility of an item, not yet resolved.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum RawVisibility {
     /// `pub(in module)`, `pub(crate)` or `pub(super)`. Also private, which is
     /// equivalent to `pub(self)`.
@@ -629,7 +636,7 @@ pub enum RawVisibility {
 
 /// Whether the item was imported through an explicit `pub(crate) use` or just a `use` without
 /// visibility.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum VisibilityExplicitness {
     Explicit,
     Implicit,
@@ -641,44 +648,44 @@ impl VisibilityExplicitness {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Const {
     /// `None` for `const _: () = ();`
     pub name: Option<Name>,
     pub(crate) visibility: RawVisibilityId,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Static {
     pub name: Name,
     pub(crate) visibility: RawVisibilityId,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Trait {
     pub name: Name,
     pub(crate) visibility: RawVisibilityId,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Impl {
     pub is_trait_impl: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TypeAlias {
     pub name: Name,
     pub(crate) visibility: RawVisibilityId,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Mod {
     pub name: Name,
     pub(crate) visibility: RawVisibilityId,
     pub(crate) kind: ModKind,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub(crate) enum ModKind {
     /// `mod m { ... }`
     Inline { items: Box<[ModItemId]> },
@@ -686,7 +693,7 @@ pub(crate) enum ModKind {
     Outline,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct MacroCall {
     /// Path to the called macro.
     pub path: Interned<ModPath>,
@@ -694,14 +701,14 @@ pub struct MacroCall {
     pub ctxt: SyntaxContext,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct MacroRules {
     /// The name of the declared macro.
     pub name: Name,
 }
 
 /// "Macros 2.0" macro definition.
-#[derive(Debug, Clone, Eq, PartialEq)]
+#[derive(Debug, Clone, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Macro2 {
     pub name: Name,
     pub(crate) visibility: RawVisibilityId,

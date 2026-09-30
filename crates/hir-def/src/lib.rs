@@ -92,8 +92,8 @@ use crate::{
 };
 
 pub use crate::{
-    find_path::FindPathConfig, hir::type_ref, item_tree::file_item_tree,
-    lang_item::crate_notable_traits, signatures::LocalFieldId,
+    find_path::FindPathConfig, hir::type_ref, item_tree::FILE_ITEM_TREE_EXECUTIONS,
+    item_tree::file_item_tree, lang_item::crate_notable_traits, signatures::LocalFieldId,
 };
 pub use hir_expand::{Intern, Lookup, tt};
 

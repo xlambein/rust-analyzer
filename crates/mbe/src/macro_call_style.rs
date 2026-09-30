@@ -21,6 +21,25 @@ bitflags::bitflags! {
     }
 }
 
+impl serde::Serialize for MacroCallStyles {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.bits().serialize(serializer)
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for MacroCallStyles {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Self::from_bits(u8::deserialize(deserializer)?)
+            .ok_or_else(|| serde::de::Error::custom("invalid bits set"))
+    }
+}
+
 impl From<MacroCallStyle> for MacroCallStyles {
     fn from(kind: MacroCallStyle) -> Self {
         match kind {

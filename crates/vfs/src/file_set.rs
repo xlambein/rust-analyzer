@@ -7,6 +7,7 @@ use std::fmt;
 use fst::{IntoStreamer, Streamer};
 use indexmap::IndexMap;
 use rustc_hash::{FxBuildHasher, FxHashMap};
+use serde::ser::{SerializeSeq, SerializeStruct};
 
 use crate::{AnchoredPath, FileId, Vfs, VfsPath};
 
@@ -15,6 +16,64 @@ use crate::{AnchoredPath, FileId, Vfs, VfsPath};
 pub struct FileSet {
     files: FxHashMap<VfsPath, FileId>,
     paths: IndexMap<FileId, VfsPath, FxBuildHasher>,
+}
+
+impl serde::Serialize for FileSet {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut file_set = serializer.serialize_struct("FileSet", 2)?;
+        file_set.serialize_field("files", &FilesAsSeq(&self.files))?;
+        file_set.serialize_field("paths", &PathsAsSeq(&self.paths))?;
+        file_set.end()
+    }
+}
+
+impl<'de> serde::Deserialize<'de> for FileSet {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        struct FileSetData {
+            files: Vec<(VfsPath, FileId)>,
+            paths: Vec<(FileId, VfsPath)>,
+        }
+
+        let FileSetData { files, paths } = FileSetData::deserialize(deserializer)?;
+        Ok(Self { files: files.into_iter().collect(), paths: paths.into_iter().collect() })
+    }
+}
+
+struct FilesAsSeq<'a>(&'a FxHashMap<VfsPath, FileId>);
+
+impl serde::Serialize for FilesAsSeq<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+        for (path, file) in self.0 {
+            seq.serialize_element(&(path, file))?;
+        }
+        seq.end()
+    }
+}
+
+struct PathsAsSeq<'a>(&'a IndexMap<FileId, VfsPath, FxBuildHasher>);
+
+impl serde::Serialize for PathsAsSeq<'_> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+        for (file, path) in self.0 {
+            seq.serialize_element(&(file, path))?;
+        }
+        seq.end()
+    }
 }
 
 impl FileSet {

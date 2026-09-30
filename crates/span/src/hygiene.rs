@@ -62,7 +62,7 @@ mod imp {
         data: SyntaxContextData,
     }
 
-    #[derive(Clone, Copy, PartialEq, Eq, Hash)]
+    #[derive(Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
     pub struct SyntaxContext(NonZeroU32);
 
     impl SyntaxContext {

@@ -22,6 +22,7 @@ smallvec.workspace = true
 triomphe.workspace = true
 salsa.workspace = true
 thin-vec.workspace = true
+serde.workspace = true
 
 # local deps
 stdx.workspace = true

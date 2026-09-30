@@ -4,8 +4,10 @@
 //! Each tick provides an immutable snapshot of the state as `WorldSnapshot`.
 
 use std::{
+    io::Read,
     ops::Not as _,
     panic::AssertUnwindSafe,
+    path::PathBuf,
     time::{Duration, Instant},
 };
 
@@ -227,6 +229,46 @@ pub(crate) struct GlobalStateSnapshot {
     minicore: MiniCoreRustAnalyzerInternalOnly,
 }
 
+impl GlobalState {
+    pub(crate) fn persist(&mut self) {
+        let start = Instant::now();
+        eprintln!("persisting inner state...");
+        let persist_path = std::env::var("RA_PERSIST").ok().map(std::path::PathBuf::from);
+        let Some(path) = persist_path else { return };
+
+        serde_json::to_writer(
+            std::fs::File::create(path.join("salsa.json")).unwrap(),
+            &<dyn salsa::Database>::as_serialize(self.analysis_host.raw_database_mut()),
+        )
+        .unwrap();
+        serde_json::to_writer(
+            std::fs::File::create(path.join("db.json")).unwrap(),
+            self.analysis_host.raw_database(),
+        )
+        .unwrap();
+        let vfs = self.vfs.read();
+        serde_json::to_writer(std::fs::File::create(path.join("vfs.json")).unwrap(), &*vfs)
+            .unwrap();
+        eprintln!("done persisting.");
+        tracing::info!(
+            elapsed = ?start.elapsed(),
+            "finished persisting"
+        );
+    }
+}
+
+impl GlobalStateSnapshot {
+    pub(crate) fn persist(&mut self) {
+        let persist_path = std::env::var("RA_PERSIST").ok().map(std::path::PathBuf::from);
+        let Some(path) = persist_path else { return };
+
+        self.analysis.persist(&path);
+        let vfs = self.vfs.read();
+        serde_json::to_writer(std::fs::File::create(path.join("vfs.json")).unwrap(), &*vfs)
+            .unwrap();
+    }
+}
+
 impl std::panic::UnwindSafe for GlobalStateSnapshot {}
 
 impl GlobalState {
@@ -255,7 +297,46 @@ impl GlobalState {
             DeferredTaskQueue { sender, receiver }
         };
 
-        let mut analysis_host = AnalysisHost::new(config.lru_parse_query_capacity());
+        let persist_paths = std::env::var("RA_PERSIST")
+            .ok()
+            .map(|path| {
+                let path = PathBuf::from(path);
+                (path.join("db.json"), path.join("salsa.json"), path.join("vfs.json"))
+            })
+            .filter(|(a, b, c)| a.exists() && b.exists() && c.exists());
+        let (mut analysis_host, vfs, line_endings) = if let Some((db_path, salsa_path, vfs_path)) =
+            persist_paths
+        {
+            let start = Instant::now();
+            let mut db: ide::RootDatabase =
+                serde_json::from_reader(std::fs::File::open(db_path).expect("opening db.json"))
+                    .expect("parsing db.json");
+
+            <dyn salsa::Database>::deserialize(
+                &mut db,
+                &mut serde_json::Deserializer::from_str(
+                    &std::fs::read_to_string(salsa_path).expect("opening salsa.json"),
+                ),
+            )
+            .expect("opening salsa.json");
+
+            let (vfs, line_endings): (vfs::Vfs, _) =
+                serde_json::from_reader(std::fs::File::open(vfs_path).expect("opening vfs.json"))
+                    .expect("parsing vfs.json");
+
+            tracing::info!(
+                elapsed = ?start.elapsed(),
+                "loaded persistent state"
+            );
+            (AnalysisHost::with_database(db), vfs, line_endings)
+        } else {
+            (
+                AnalysisHost::new(config.lru_parse_query_capacity()),
+                Default::default(),
+                Default::default(),
+            )
+        };
+
         if let Some(capacities) = config.lru_query_capacities_config() {
             analysis_host.update_lru_capacities(capacities);
         }
@@ -310,7 +391,7 @@ impl GlobalState {
 
             fetch_ws_receiver: None,
 
-            vfs: Arc::new(RwLock::new((vfs::Vfs::default(), Default::default()))),
+            vfs: Arc::new(RwLock::new((vfs, line_endings))),
             vfs_config_version: 0,
             vfs_progress_config_version: 0,
             vfs_span: None,

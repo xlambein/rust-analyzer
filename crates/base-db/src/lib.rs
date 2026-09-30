@@ -8,6 +8,7 @@
 extern crate rustc_driver as _;
 
 pub use salsa;
+use serde::ser::SerializeMap;
 use span::TextSize;
 
 mod change;
@@ -69,7 +70,7 @@ pub const DEFAULT_FILE_TEXT_LRU_CAP: u16 = 16;
 pub const DEFAULT_PARSE_LRU_CAP: u16 = 128;
 pub const DEFAULT_BORROWCK_LRU_CAP: u16 = 2024;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Files {
     files: Arc<DashMap<vfs::FileId, FileText, BuildHasherDefault<FxHasher>>>,
     source_roots: Arc<DashMap<SourceRootId, SourceRootInput, BuildHasherDefault<FxHasher>>>,
@@ -214,20 +215,47 @@ pub struct LocalRoots {
     pub roots: FxHashSet<SourceRootId>,
 }
 
-#[salsa::input(debug)]
+#[salsa::input(debug, persist(serialize = serialize_file_text, deserialize = deserialize_file_text))]
 pub struct FileText {
     #[returns(ref)]
     pub text: Arc<str>,
     pub file_id: vfs::FileId,
 }
 
-#[salsa::input(debug)]
+fn serialize_file_text<S>(
+    (text, file_id): &(Arc<str>, vfs::FileId),
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let mut s = serializer.serialize_map(Some(2))?;
+    s.serialize_entry("text", text.as_ref())?;
+    s.serialize_entry("file_id", &file_id.index())?;
+    s.end()
+}
+
+fn deserialize_file_text<'de, D>(deserializer: D) -> Result<(Arc<str>, vfs::FileId), D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(serde::Deserialize)]
+    struct FileTextImpl {
+        pub text: String,
+        pub file_id: u32,
+    }
+    let FileTextImpl { text, file_id } =
+        <FileTextImpl as serde::Deserialize>::deserialize(deserializer)?;
+    Ok((Arc::from(text), vfs::FileId::from_raw(file_id)))
+}
+
+#[salsa::input(debug, persist)]
 pub struct FileSourceRootInput {
     #[returns(copy)]
     pub source_root_id: SourceRootId,
 }
 
-#[salsa::input(debug)]
+#[salsa::input(debug, persist)]
 pub struct SourceRootInput {
     #[returns(clone)]
     pub source_root: Arc<SourceRoot>,
@@ -307,7 +335,7 @@ impl Nonce {
 }
 
 /// Crate related data shared by the whole workspace.
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CrateWorkspaceData {
     pub target: Result<target::TargetData, target::TargetLoadError>,
     /// Toolchain version used to compile the crate.

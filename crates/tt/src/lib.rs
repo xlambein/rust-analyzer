@@ -70,7 +70,7 @@ impl IdentIsRaw {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, serde::Serialize, serde::Deserialize)]
 pub enum LitKind {
     Byte,
     Char,
@@ -383,7 +383,7 @@ pub enum DelimiterKind {
     Invisible = 3,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct Literal {
     /// Escaped, text then suffix concatenated.
     pub text_and_suffix: Symbol,

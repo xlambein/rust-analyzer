@@ -65,7 +65,7 @@ intern = { path = "./crates/intern", version = "0.0.0" }
 load-cargo = { path = "./crates/load-cargo", version = "0.0.0" }
 mbe = { path = "./crates/mbe", version = "0.0.0" }
 parser = { path = "./crates/parser", version = "0.0.0" }
-paths = { path = "./crates/paths", version = "0.0.0" }
+paths = { path = "./crates/paths", version = "0.0.0", features = ["serde1"] }
 proc-macro-api = { path = "./crates/proc-macro-api", version = "0.0.0" }
 proc-macro-srv = { path = "./crates/proc-macro-srv", version = "0.0.0" }
 profile = { path = "./crates/profile", version = "0.0.0" }
@@ -127,9 +127,10 @@ salsa = { version = "0.28.5", default-features = false, features = [
     "salsa_unstable",
     "macros",
     "inventory",
-    "triomphe"
+    "triomphe",
+    "persistence"
 ] }
-semver = "1.0.26"
+semver = { version = "1.0.26", features = ["serde"] }
 serde = { version = "1.0.219" }
 serde_derive = { version = "1.0.219" }
 serde_json = "1.0.140"
@@ -139,9 +140,10 @@ smallvec = { version = "1.15.1", features = [
     "const_new",
     "union",
     "const_generics",
+    "serde"
 ] }
 smol_str = "0.3.2"
-text-size = "1.1.1"
+text-size = { version = "1.1.1", features = ["serde"] }
 toml = "1.1.2"
 tracing = { version = "0.1.41", default-features = false, features = ["std"] }
 tracing-tree = "0.4.0"
@@ -163,7 +165,7 @@ hashbrown = { version = "0.17.0", features = [
 ], default-features = false }
 
 # We need to freeze the version of the crate, as the raw-api feature is considered unstable
-dashmap = { version = "=6.2.1", features = ["raw-api", "inline"] }
+dashmap = { version = "=6.2.1", features = ["raw-api", "inline", "serde"] }
 
 [workspace.lints.rust]
 # remember to update RUSTFLAGS in ci.yml if you add something here

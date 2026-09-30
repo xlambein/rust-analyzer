@@ -39,9 +39,29 @@ use triomphe::{Arc, ArcBorrow};
 type InternMap<T> = DashMap<Arc<T>, (), FxBuildHasher>;
 type Guard<T> = dashmap::RwLockWriteGuard<'static, RawTable<(Arc<T>, SharedValue<()>)>>;
 
+#[derive(serde::Serialize, serde::Deserialize)]
+#[serde(transparent)]
 pub struct Interned<T: Internable> {
     arc: Arc<T>,
 }
+
+// impl<T: Internable + serde::Serialize> serde::Serialize for Interned<T> {
+//     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer,
+//     {
+//         self.as_ref().serialize(serializer)
+//     }
+// }
+
+// impl<'de, T: Internable + serde::Deserialize<'de>> serde::Deserialize<'de> for Interned<T> {
+//     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+//     where
+//         D: serde::Deserializer<'de>,
+//     {
+//         Ok(Self::new(T::deserialize(deserializer)?))
+//     }
+// }
 
 impl<T: Internable> Interned<T> {
     #[inline]

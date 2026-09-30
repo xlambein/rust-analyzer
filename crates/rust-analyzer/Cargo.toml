@@ -54,6 +54,7 @@ memchr = "2.7.5"
 cargo_metadata.workspace = true
 process-wrap.workspace = true
 dhat = { version = "0.3.3", optional = true }
+salsa.workspace = true
 
 cfg.workspace = true
 hir-def.workspace = true

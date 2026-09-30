@@ -13,7 +13,9 @@ use triomphe::Arc;
 
 use crate::{ExpandError, ExpandErrorKind, ExpandResult, tt};
 
-#[derive(Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash)]
+#[derive(
+    Copy, Clone, Eq, PartialEq, PartialOrd, Ord, Debug, Hash, serde::Serialize, serde::Deserialize,
+)]
 pub enum ProcMacroKind {
     CustomDerive,
     Bang,
@@ -214,7 +216,7 @@ impl PartialEq for ProcMacro {
 }
 
 /// A custom proc-macro expander handle. This handle together with its crate resolves to a [`ProcMacro`]
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct CustomProcMacroExpander {
     proc_macro_id: u32,
 }

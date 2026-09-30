@@ -21,7 +21,7 @@ use crate::{
     Subtree, SubtreeView, TokenTree, TokenTreesView, TtIter,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 struct CompressedSpanPart {
     anchor: SpanAnchor,
     ctx: SyntaxContext,
@@ -1069,7 +1069,7 @@ impl<'a> TokenTreesSlice<'a> {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub struct TopSubtree {
     buffer: Box<[u8]>,
     /// The last two are the top subtree's open and close span, in this order.
