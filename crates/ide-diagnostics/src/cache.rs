@@ -120,7 +120,8 @@ pub(super) fn semantic_diagnostics(
     // them, whereas quick fixes include them even when publication is disabled.
     cached_config.enabled = true;
     cached_config.disable_experimental = false;
-    let request = DiagnosticsRequest::new(db, file_id, CacheConfig(cached_config), resolve.clone());
+    let config_key = CacheConfig(cached_config);
+    let request = DiagnosticsRequest::new(db, file_id, &config_key, resolve);
     semantic_diagnostics_query(db, request)
         .iter()
         .filter(|diagnostic| !config.disable_experimental || !diagnostic.experimental)
