@@ -11,16 +11,26 @@ use ide_db::{
 
 use crate::{Diagnostic, DiagnosticsConfig};
 
-// Private Salsa view for diagnostic handlers, which currently use RootDatabase.
+// Private Salsa view for diagnostic computation, keeping RootDatabase inside the implementation.
 #[salsa::db]
 trait DiagnosticsDatabase: salsa::Database {
-    fn root_database(&self) -> &RootDatabase;
+    fn compute_semantic_diagnostics(
+        &self,
+        config: &DiagnosticsConfig,
+        resolve: &AssistResolveStrategy,
+        file_id: FileId,
+    ) -> Vec<Diagnostic>;
 }
 
 #[salsa::db]
 impl DiagnosticsDatabase for RootDatabase {
-    fn root_database(&self) -> &RootDatabase {
-        self
+    fn compute_semantic_diagnostics(
+        &self,
+        config: &DiagnosticsConfig,
+        resolve: &AssistResolveStrategy,
+        file_id: FileId,
+    ) -> Vec<Diagnostic> {
+        crate::semantic_diagnostics_uncached(self, config, resolve, file_id)
     }
 }
 
@@ -101,12 +111,7 @@ fn semantic_diagnostics_query<'db>(
     db: &'db dyn DiagnosticsDatabase,
     request: DiagnosticsRequest<'db>,
 ) -> Vec<Diagnostic> {
-    crate::semantic_diagnostics_uncached(
-        db.root_database(),
-        &request.config(db).0,
-        request.resolve(db),
-        request.file_id(db),
-    )
+    db.compute_semantic_diagnostics(&request.config(db).0, request.resolve(db), request.file_id(db))
 }
 
 pub(super) fn semantic_diagnostics(
@@ -120,8 +125,7 @@ pub(super) fn semantic_diagnostics(
     // them, whereas quick fixes include them even when publication is disabled.
     cached_config.enabled = true;
     cached_config.disable_experimental = false;
-    let config_key = CacheConfig(cached_config);
-    let request = DiagnosticsRequest::new(db, file_id, &config_key, resolve);
+    let request = DiagnosticsRequest::new(db, file_id, &CacheConfig(cached_config), resolve);
     semantic_diagnostics_query(db, request)
         .iter()
         .filter(|diagnostic| !config.disable_experimental || !diagnostic.experimental)
