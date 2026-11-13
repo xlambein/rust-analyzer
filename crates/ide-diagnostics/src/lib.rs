@@ -28,6 +28,8 @@
 #[cfg(feature = "in-rust-tree")]
 extern crate rustc_driver as _;
 
+mod cache;
+
 mod handlers {
     pub(crate) mod array_pattern_without_fixed_length;
     pub(crate) mod await_outside_of_async;
@@ -180,7 +182,7 @@ impl DiagnosticCode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Diagnostic {
     pub code: DiagnosticCode,
     pub message: String,
@@ -270,7 +272,7 @@ impl Diagnostic {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DiagnosticsConfig {
     /// Whether native diagnostics are enabled.
     pub enabled: bool,
@@ -380,7 +382,17 @@ pub fn semantic_diagnostics(
     resolve: &AssistResolveStrategy,
     file_id: FileId,
 ) -> Vec<Diagnostic> {
+    cache::semantic_diagnostics(db, config, resolve, file_id)
+}
+
+fn semantic_diagnostics_uncached(
+    db: &RootDatabase,
+    config: &DiagnosticsConfig,
+    resolve: &AssistResolveStrategy,
+    file_id: FileId,
+) -> Vec<Diagnostic> {
     let _p = tracing::info_span!("semantic_diagnostics").entered();
+    cov_mark::hit!(semantic_diagnostics_computed);
     let sema = Semantics::new(db);
     let editioned_file_id = sema.attach_first_edition(file_id);
 

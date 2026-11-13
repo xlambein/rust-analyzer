@@ -1,5 +1,6 @@
 #![allow(clippy::print_stderr)]
 
+mod caching;
 mod overly_long_real_world_cases;
 
 use hir::setup_tracing;

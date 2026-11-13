@@ -1182,6 +1182,7 @@ dependencies = [
  "ide-db",
  "itertools 0.15.0",
  "paths",
+ "salsa",
  "serde_json",
  "smallvec",
  "stdx",

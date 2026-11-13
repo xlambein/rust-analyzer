@@ -41,7 +41,7 @@ pub enum Command {
     Rename,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AssistKind {
     QuickFix,
     Generate,
@@ -130,7 +130,7 @@ impl AssistId {
 
 /// A way to control how many assist to resolve during the assist resolution.
 /// When an assist is resolved, its edits are calculated that might be costly to always do by default.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum AssistResolveStrategy {
     /// No assists should be resolved.
     None,
@@ -143,7 +143,7 @@ pub enum AssistResolveStrategy {
 /// Hold the [`AssistId`] data of a certain assist to resolve.
 /// The original id object cannot be used due to a `'static` lifetime
 /// and the requirement to construct this struct dynamically during the resolve handling.
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SingleResolve {
     /// The id of the assist.
     pub assist_id: String,
