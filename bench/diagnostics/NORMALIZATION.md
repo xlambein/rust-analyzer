@@ -1,5 +1,9 @@
 # Experimental diagnostics normalization experiment
 
+Follow-up: [preserve the experimental flag](PRESERVE_EXPERIMENTAL.md), with new
+diagnostics-only and LSP measurements. Production now preserves the flag; the
+results below describe the earlier normalization implementation.
+
 Measured 2026-11-13 on the `investigate-18997` implementation at `18af8eb`.
 Compiler: rustc 1.100.0 (0ef1bc386 2026-11-09), x86_64 Linux, workspace release defaults.
 

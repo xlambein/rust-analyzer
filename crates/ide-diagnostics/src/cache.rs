@@ -121,16 +121,11 @@ pub(super) fn semantic_diagnostics(
     file_id: FileId,
 ) -> Vec<Diagnostic> {
     let mut cached_config = config.clone();
-    // Enablement is handled by callers. Cache experimental diagnostics too: publication hides
-    // them, whereas quick fixes include them even when publication is disabled.
+    // Enablement is handled by callers. Preserve the experimental flag so publication
+    // can skip post-processing hidden diagnostics; quick fixes use a separate cache entry.
     cached_config.enabled = true;
-    cached_config.disable_experimental = false;
     let request = DiagnosticsRequest::new(db, file_id, &CacheConfig(cached_config), resolve);
-    semantic_diagnostics_query(db, request)
-        .iter()
-        .filter(|diagnostic| !config.disable_experimental || !diagnostic.experimental)
-        .cloned()
-        .collect()
+    semantic_diagnostics_query(db, request).to_vec()
 }
 
 #[cfg(test)]

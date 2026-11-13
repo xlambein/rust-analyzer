@@ -22,9 +22,8 @@ fn f() { let _ = S {}; }
     assert_eq!(diagnostics.len(), 1);
     assert_eq!(diagnostics[0].code.as_str(), "E0063");
 
-    // LSP requests use different snapshots, and quick fixes include experimental diagnostics.
+    // Requests with the same configuration reuse results across database snapshots.
     let snapshot = db.clone();
-    config.disable_experimental = false;
     let fixes = hir::attach_db(&snapshot, || {
         semantic_diagnostics(&snapshot, &config, &AssistResolveStrategy::None, file)
     });
@@ -87,6 +86,8 @@ fn f(field: i32) { let _ = S { field: field }; }
     let file = file.file_id(&db);
     let mut config = DiagnosticsConfig::test_sample();
     config.disable_experimental = true;
+    // Hidden diagnostics, enabled diagnostics, and explicitly disabled lints use separate keys.
+    cov_mark::check_count!(semantic_diagnostics_computed, 3);
     assert!(
         hir::attach_db(&db, || {
             semantic_diagnostics(&db, &config, &AssistResolveStrategy::None, file)
@@ -102,6 +103,16 @@ fn f(field: i32) { let _ = S { field: field }; }
     assert_eq!(diagnostics[0].code.as_str(), "redundant_field_names");
     assert!(diagnostics[0].fixes.as_ref().unwrap()[0].source_change.is_some());
 
+    // Returning to the hidden configuration reuses its original result.
+    config.disable_experimental = true;
+    assert!(
+        hir::attach_db(&db, || {
+            semantic_diagnostics(&db, &config, &AssistResolveStrategy::None, file)
+        })
+        .is_empty()
+    );
+
+    config.disable_experimental = false;
     config.disabled.insert("redundant_field_names".to_owned());
     assert!(
         hir::attach_db(&db, || {

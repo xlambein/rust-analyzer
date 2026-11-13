@@ -41,7 +41,9 @@ then starts timing. Cargo checking and cache priming are disabled.
 
 - `unchanged_*`: repeated requests in the same database revision.
 - `edited_*`: append a changing comment, then repeat the same requests. This
-  measures diagnostics recomputation followed by quick-fix reuse after each edit.
+  measures diagnostics recomputation followed by quick-fix listing after each edit.
+  Requests with different experimental flags or resolution modes use separate
+  cache entries; the default publication and quick-fix configurations differ.
 - `*_resolve` is a protocol control: missing-field fixes already contain an edit,
   so resolution returns it unchanged. Lazy rename resolution is covered by Rust
   regression tests, rather than claimed as a speedup from this fixture.

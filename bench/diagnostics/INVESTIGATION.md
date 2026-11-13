@@ -96,3 +96,13 @@ the common work across first-time resolution and clients requesting eager fixes.
 Before expanding scope, profile a representative real workspace and measure cache
 retention and cold-request overhead. Finer-grained per-body queries would be a
 larger follow-up for reuse across edits within a file.
+
+## Experimental flag follow-up (2026-11-13)
+
+The initial cache normalized `disable_experimental` to share publication and
+quick-fix computations. A diagnostics-only experiment found substantial extra
+lint post-processing even when experimental diagnostics were hidden. The cache
+now preserves that flag, retaining reuse within each configuration. This avoids
+the stress-case regression but gives up cross-flag reuse for post-edit quick fixes.
+See [the follow-up measurements](PRESERVE_EXPERIMENTAL.md) for current results;
+earlier timing tables above describe the normalized implementation.

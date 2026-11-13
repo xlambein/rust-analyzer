@@ -25,23 +25,24 @@ fn request(
         Mode::Uncached => {
             crate::semantic_diagnostics_uncached(db, config, &AssistResolveStrategy::None, file)
         }
-        Mode::PreserveFlag => {
+        Mode::PreserveFlag => semantic_diagnostics(db, config, &AssistResolveStrategy::None, file),
+        Mode::NormalizeFlag => {
             let mut config = config.clone();
             config.enabled = true;
+            config.disable_experimental = false;
             let key = DiagnosticsRequest::new(
                 db,
                 file,
                 &CacheConfig(config),
                 &AssistResolveStrategy::None,
             );
-            // Match the production wrapper's filtering and cloning exactly.
+            // Reproduce the previous production wrapper's normalization and late filtering.
             semantic_diagnostics_query(db, key)
                 .iter()
                 .filter(|d| !d.experimental)
                 .cloned()
                 .collect()
         }
-        Mode::NormalizeFlag => semantic_diagnostics(db, config, &AssistResolveStrategy::None, file),
     })
 }
 
