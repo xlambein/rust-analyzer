@@ -134,6 +134,9 @@ pub(super) fn semantic_diagnostics(
 }
 
 #[cfg(test)]
+mod normalization_bench;
+
+#[cfg(test)]
 mod tests {
     use super::*;
 
