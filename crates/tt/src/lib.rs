@@ -34,13 +34,6 @@ pub use self::storage::{TopSubtree, TopSubtreeBuilder};
 
 pub const MAX_GLUED_PUNCT_LEN: usize = 3;
 
-#[derive(Clone, PartialEq, Debug)]
-pub struct Lit {
-    pub kind: LitKind,
-    pub symbol: Symbol,
-    pub suffix: Option<Symbol>,
-}
-
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 #[repr(u8)]
 // The discriminants are important for `storage.rs` decoding.
